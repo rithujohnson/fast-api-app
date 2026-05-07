@@ -88,6 +88,14 @@ def test_create_item_duplicate_name_returns_409(client: TestClient):
     assert body["code"] == "DUPLICATE_ITEM_NAME"
     assert "Apple" in body["message"]
 
+
+def test_create_item_invalid_category_returns_400(client: TestClient):
+    response = client.post("/items/", json={"name": "Candy Bar", "price": 1.00, "category": "Candy"})
+    assert response.status_code == 400
+    body = response.json()["detail"]
+    assert body["code"] == "INVALID_CATEGORY"
+    assert "Candy" in body["message"]
+
 # --- PUT ---
 
 def test_update_item_returns_200(client: TestClient):
@@ -114,10 +122,17 @@ def test_update_item_clears_description_when_omitted(client: TestClient):
 
 
 def test_update_item_not_found_returns_404(client: TestClient):
-    response = client.put("/items/99", json={"name": "Ghost", "price": 1.00, "category": "Other"})
+    response = client.put("/items/99", json={"name": "Ghost", "price": 1.00, "category": "Fruit"})
     assert response.status_code == 404
     body = response.json()["detail"]
     assert body["code"] == "ITEM_NOT_FOUND"
+
+
+def test_update_item_invalid_category_returns_400(client: TestClient):
+    response = client.put("/items/1", json={"name": "Apple", "price": 1.50, "category": "Invalid"})
+    assert response.status_code == 400
+    body = response.json()["detail"]
+    assert body["code"] == "INVALID_CATEGORY"
 
 
 def test_update_item_missing_required_field_returns_422(client: TestClient):
@@ -145,11 +160,11 @@ def test_patch_item_single_field_returns_200(client: TestClient):
 
 
 def test_patch_item_multiple_fields_returns_200(client: TestClient):
-    response = client.patch("/items/1", json={"name": "Red Apple", "category": "Produce"})
+    response = client.patch("/items/1", json={"name": "Red Apple", "category": "Vegetable"})
     assert response.status_code == 200
     data = response.json()
     assert data["name"] == "Red Apple"
-    assert data["category"] == "Produce"
+    assert data["category"] == "Vegetable"
     assert data["price"] == 1.50          # unchanged
 
 
@@ -158,6 +173,13 @@ def test_patch_item_not_found_returns_404(client: TestClient):
     assert response.status_code == 404
     body = response.json()["detail"]
     assert body["code"] == "ITEM_NOT_FOUND"
+
+
+def test_patch_item_invalid_category_returns_400(client: TestClient):
+    response = client.patch("/items/1", json={"category": "Invalid"})
+    assert response.status_code == 400
+    body = response.json()["detail"]
+    assert body["code"] == "INVALID_CATEGORY"
 
 
 def test_patch_item_empty_name_returns_422(client: TestClient):
@@ -341,6 +363,26 @@ def test_get_items_min_price_greater_than_max_price_returns_400(rich_client: Tes
     assert response.status_code == 400
     body = response.json()["detail"]
     assert body["code"] == "INVALID_PRICE_RANGE"
+
+
+# --- GET /categories/ ---
+
+def test_get_all_categories_returns_200(client: TestClient):
+    response = client.get("/categories/")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, list)
+    assert "Fruit" in data
+
+
+def test_get_all_categories_returns_sorted_unique_list(rich_client: TestClient):
+    response = rich_client.get("/categories/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data == sorted(data)
+    assert len(data) == len(set(data))
+    assert "Fruit" in data
+    assert "Vegetable" in data
 
 
 # --- GET all: combined ---

@@ -1,7 +1,8 @@
 """Item service"""
 
 import logging
-from app.exceptions import DuplicateItemNameError, InvalidPriceRangeError, ItemNotFoundError
+from app.exceptions import DuplicateItemNameError, InvalidCategoryError, InvalidPriceRangeError, ItemNotFoundError
+from app.models.category import Category
 from app.models.item import Item
 from app.schemas.item_schema import ItemCreateRequest, ItemUpdateRequest, ItemPatchRequest
 from app.repositories import item_repository
@@ -48,6 +49,9 @@ def create_item(request: ItemCreateRequest) -> Item:
     except DuplicateItemNameError:
         logger.warning("Duplicate item name: name=%s", request.name)
         raise
+    except InvalidCategoryError:
+        logger.warning("Invalid category: category=%s", request.category)
+        raise
     logger.info("Item created: id=%s name=%s", item.id, item.name)
     return item
 
@@ -60,6 +64,9 @@ def update_item(item_id: int, request: ItemUpdateRequest) -> Item:
         )
     except ItemNotFoundError:
         logger.warning("Item not found for update: id=%s", item_id)
+        raise
+    except InvalidCategoryError:
+        logger.warning("Invalid category: category=%s", request.category)
         raise
     logger.info("Item updated: id=%s name=%s", item.id, item.name)
     return item
@@ -74,6 +81,9 @@ def patch_item(item_id: int, request: ItemPatchRequest) -> Item:
     except ItemNotFoundError:
         logger.warning("Item not found for patch: id=%s", item_id)
         raise
+    except InvalidCategoryError:
+        logger.warning("Invalid category: category=%s", request.category)
+        raise
     logger.info("Item patched: id=%s name=%s", item.id, item.name)
     return item
 
@@ -85,3 +95,7 @@ def delete_item(item_id: int) -> None:
         logger.warning("Item not found for deletion: id=%s", item_id)
         raise
     logger.info("Item deleted: id=%s", item_id)
+
+
+def get_all_categories() -> set[Category]:
+    return item_repository.get_all_categories()

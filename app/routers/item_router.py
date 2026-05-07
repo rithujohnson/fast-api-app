@@ -3,8 +3,8 @@
 from typing import Literal
 from fastapi import APIRouter, HTTPException, Query
 from app.services import item_services
-from app.schemas.item_schema import ItemCreateRequest, ItemResponse, ItemUpdateRequest, ItemPatchRequest    
-from app.exceptions import AppBaseException, DuplicateItemNameError, InvalidPriceRangeError, ItemNotFoundError
+from app.schemas.item_schema import ItemCreateRequest, ItemResponse, ItemUpdateRequest, ItemPatchRequest
+from app.exceptions import AppBaseException, DuplicateItemNameError, InvalidCategoryError, InvalidPriceRangeError, ItemNotFoundError
 from app.schemas.error_schema import ErrorResponse
 
 
@@ -42,7 +42,6 @@ def get_all_items(
         raise HTTPException(status_code=400, detail=_error(e))
 
 
-
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item(item_id: int) -> ItemResponse:
     try:
@@ -57,7 +56,9 @@ def create_item(request: ItemCreateRequest) -> ItemResponse:
         return item_services.create_item(request)
     except DuplicateItemNameError as e:
         raise HTTPException(status_code=409, detail=_error(e))
-    
+    except InvalidCategoryError as e:
+        raise HTTPException(status_code=400, detail=_error(e))
+
 
 @router.put("/{item_id}", response_model=ItemResponse)
 def update_item(item_id: int, request: ItemUpdateRequest) -> ItemResponse:
@@ -65,6 +66,8 @@ def update_item(item_id: int, request: ItemUpdateRequest) -> ItemResponse:
         return item_services.update_item(item_id, request)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
+    except InvalidCategoryError as e:
+        raise HTTPException(status_code=400, detail=_error(e))
 
 
 @router.patch("/{item_id}", response_model=ItemResponse)
@@ -73,6 +76,9 @@ def patch_item(item_id: int, request: ItemPatchRequest) -> ItemResponse:
         return item_services.patch_item(item_id, request)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
+    except InvalidCategoryError as e:
+        raise HTTPException(status_code=400, detail=_error(e))
+
 
 @router.delete("/{item_id}", status_code=204)
 def delete_item(item_id: int) -> None:
@@ -80,4 +86,3 @@ def delete_item(item_id: int) -> None:
         item_services.delete_item(item_id)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
-    

@@ -1,7 +1,7 @@
 """Fast API app entry point"""
 
 from fastapi import FastAPI
-from app.routers import item_router
+from app.routers import item_router, categories_router
 
 
 app = FastAPI(
@@ -11,6 +11,7 @@ app = FastAPI(
 )
 
 app.include_router(item_router.router)
+app.include_router(categories_router.router)
 
 
 @app.get("/")

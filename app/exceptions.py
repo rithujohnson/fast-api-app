@@ -44,3 +44,15 @@ class InvalidPriceRangeError(AppBaseException):
 
     def __repr__(self) -> str:
         return f"InvalidPriceRangeError(min_price={self.min_price}, max_price={self.max_price})"
+
+
+class InvalidCategoryError(AppBaseException):
+    code = "INVALID_CATEGORY"
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.message = f"'{name}' is not a valid category."
+        super().__init__(self.message)
+
+    def __repr__(self) -> str:
+        return f"InvalidCategoryError(name={self.name!r})"

@@ -3,18 +3,19 @@
 import pytest
 import app.repositories.item_repository as item_repository
 from app.models.item import Item
-from app.exceptions import DuplicateItemNameError, ItemNotFoundError
+from app.models.category import Category
+from app.exceptions import DuplicateItemNameError, InvalidCategoryError, ItemNotFoundError
 
 
 pytestmark = pytest.mark.unit
 
 
 VARIED_ITEMS = {
-    1: Item(id=1, name="Apple",    price=1.50, category="Fruit",     description=None),
-    2: Item(id=2, name="Banana",   price=0.75, category="Fruit",     description=None),
-    3: Item(id=3, name="Carrot",   price=0.50, category="Vegetable", description=None),
-    4: Item(id=4, name="Broccoli", price=1.20, category="Vegetable", description=None),
-    5: Item(id=5, name="Mango",    price=2.50, category="Fruit",     description=None),
+    1: Item(id=1, name="Apple",    price=1.50, category=Category("Fruit"),     description=None),
+    2: Item(id=2, name="Banana",   price=0.75, category=Category("Fruit"),     description=None),
+    3: Item(id=3, name="Carrot",   price=0.50, category=Category("Vegetable"), description=None),
+    4: Item(id=4, name="Broccoli", price=1.20, category=Category("Vegetable"), description=None),
+    5: Item(id=5, name="Mango",    price=2.50, category=Category("Fruit"),     description=None),
 }
 
 
@@ -41,12 +42,24 @@ def test_create_raises_on_duplicate_name():
     assert exc_info.value.name == "Apple"
 
 
+def test_create_raises_on_invalid_category():
+    with pytest.raises(InvalidCategoryError) as exc_info:
+        item_repository.create(name="Candy Bar", price=1.00, category="Candy", description=None)
+    assert exc_info.value.name == "Candy"
+
+
 # --- update ---
 
 def test_update_raises_when_not_found():
     with pytest.raises(ItemNotFoundError) as exc_info:
-        item_repository.update(item_id=99, name="Ghost", price=1.00, category="Other", description=None)
+        item_repository.update(item_id=99, name="Ghost", price=1.00, category="Fruit", description=None)
     assert exc_info.value.item_id == 99
+
+
+def test_update_raises_on_invalid_category():
+    with pytest.raises(InvalidCategoryError) as exc_info:
+        item_repository.update(item_id=1, name="Apple", price=1.50, category="Invalid", description=None)
+    assert exc_info.value.name == "Invalid"
 
 
 # --- patch ---
@@ -57,13 +70,29 @@ def test_patch_raises_when_not_found():
     assert exc_info.value.item_id == 99
 
 
+def test_patch_raises_on_invalid_category():
+    with pytest.raises(InvalidCategoryError) as exc_info:
+        item_repository.patch(item_id=1, name=None, price=None, category="Invalid", description=None)
+    assert exc_info.value.name == "Invalid"
+
+
 # --- delete ---
 
 def test_delete_raises_when_not_found():
     with pytest.raises(ItemNotFoundError) as exc_info:
         item_repository.delete(99)
     assert exc_info.value.item_id == 99
-    
+
+
+# --- get_all_categories ---
+
+def test_get_all_categories_returns_unique_set():
+    result = item_repository.get_all_categories()
+    assert isinstance(result, set)
+    assert Category("Fruit") in result
+    assert Category("Vegetable") in result
+    assert len(result) == 2
+
 
 # --- no filters ---
 
@@ -77,13 +106,13 @@ def test_get_all_no_params_returns_all_items():
 def test_get_all_filter_by_category_returns_matching_items():
     result = item_repository.get_all(category="Fruit")
     assert len(result) == 3
-    assert all(item.category == "Fruit" for item in result)
+    assert all(str(item.category) == "Fruit" for item in result)
 
 
 def test_get_all_filter_by_category_vegetable():
     result = item_repository.get_all(category="Vegetable")
     assert len(result) == 2
-    assert all(item.category == "Vegetable" for item in result)
+    assert all(str(item.category) == "Vegetable" for item in result)
 
 
 def test_get_all_filter_by_category_no_match_returns_empty():
@@ -115,7 +144,7 @@ def test_get_all_filter_by_price_range():
 def test_get_all_filter_category_and_min_price():
     result = item_repository.get_all(category="Fruit", min_price=1.00)
     assert len(result) == 2  # Apple(1.50), Mango(2.50)
-    assert all(item.category == "Fruit" for item in result)
+    assert all(str(item.category) == "Fruit" for item in result)
     assert all(item.price >= 1.00 for item in result)
 
 
