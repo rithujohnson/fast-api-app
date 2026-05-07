@@ -4,21 +4,68 @@ from app.models.item import Item
 
 
 _items: dict[int, Item] = {
-    1: Item(id=1, name="Apple", price=1.50),
-    2: Item(id=2, name="Banana", price=0.75),
+    1: Item(id=1, name="Apple", price=1.50, category="Fruit", description="A juicy red apple"),
+    2: Item(id=2, name="Banana", price=0.75, category="Fruit", description="A sweet yellow banana"),
 }
 
 
-def get_all() -> list[Item]:
-    return list(_items.values())
+def get_all(
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    sort_by: str | None = None,
+    order: str = "asc",
+    skip: int = 0,
+    limit: int = 10,
+) -> list[Item]:
+    items = list(_items.values())
+
+    if category is not None:
+        items = [item for item in items if item.category == category]
+    if min_price is not None:
+        items = [item for item in items if item.price >= min_price]
+    if max_price is not None:
+        items = [item for item in items if item.price <= max_price]
+
+    if sort_by is not None:
+        items = sorted(items, key=lambda item: getattr(item, sort_by), reverse=(order == "desc"))
+
+    return items[skip : skip + limit]
 
 
 def get_by_id(item_id: int) -> Item | None:
     return _items.get(item_id)
 
 
-def create(name: str, price: float) -> Item:
+def create(name: str, price: float, category: str, description: str | None) -> Item:
     new_id = max(_items.keys(), default=0) + 1
-    new_item = Item(id=new_id, name=name, price=price)
+    new_item = Item(id=new_id, name=name, price=price, category=category, description=description)
     _items[new_id] = new_item
     return new_item
+
+def update(item_id: int, name: str, price: float, category: str, description: str | None) -> Item | None:    
+    if item_id not in _items:
+        return None
+    updated_item = Item(id=item_id, name=name, price=price, category=category, description=description)
+    _items[item_id] = updated_item
+    return updated_item
+
+def patch(item_id: int, name: str | None, price: float | None, category: str | None, description: str | None) -> Item | None:
+    if item_id not in _items:
+        return None
+    existing_item = _items[item_id]
+    patched_item = Item(
+        id=item_id,
+        name=name if name is not None else existing_item.name,
+        price=price if price is not None else existing_item.price,
+        category=category if category is not None else existing_item.category,
+        description=description if description is not None else existing_item.description
+    )
+    _items[item_id] = patched_item
+    return patched_item 
+
+def delete(item_id: int) -> bool:
+    if item_id in _items:
+        del _items[item_id]
+        return True
+    return False    
