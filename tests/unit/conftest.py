@@ -1,22 +1,12 @@
-"""Integration test configuration and fixtures"""
-
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.main import app
 from app.database.base import Base
 from app.database.orm_models import CategoryORM, ItemORM
-from app.database.session import get_db
 
 CATEGORY_NAMES = ["Fruit", "Vegetable", "Dairy", "Grain", "Protein"]
-
-INITIAL_ITEMS_DATA = [
-    {"id": 1, "name": "Apple",  "price": 1.50, "category_name": "Fruit", "description": "A juicy red apple"},
-    {"id": 2, "name": "Banana", "price": 0.75, "category_name": "Fruit", "description": "A sweet yellow banana"},
-]
 
 VARIED_ITEMS_DATA = [
     {"id": 1, "name": "Apple",    "price": 1.50, "category_name": "Fruit",     "description": None},
@@ -27,52 +17,32 @@ VARIED_ITEMS_DATA = [
 ]
 
 
-def _make_test_client(items_data: list[dict]) -> tuple[TestClient, any]:
+@pytest.fixture
+def db():
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
     Base.metadata.create_all(bind=engine)
-    TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
 
-    db = TestingSessionLocal()
     categories = {name: CategoryORM(name=name) for name in CATEGORY_NAMES}
-    db.add_all(categories.values())
-    db.flush()
-    for item in items_data:
-        db.add(ItemORM(
+    session.add_all(categories.values())
+    session.flush()
+
+    for item in VARIED_ITEMS_DATA:
+        session.add(ItemORM(
             id=item["id"],
             name=item["name"],
             price=item["price"],
             description=item["description"],
             category_id=categories[item["category_name"]].id,
         ))
-    db.commit()
-    db.close()
+    session.commit()
 
-    def override_get_db():
-        session = TestingSessionLocal()
-        try:
-            yield session
-        finally:
-            session.close()
+    yield session
 
-    app.dependency_overrides[get_db] = override_get_db
-    return TestClient(app), engine
-
-
-@pytest.fixture
-def client():
-    test_client, engine = _make_test_client(INITIAL_ITEMS_DATA)
-    yield test_client
-    app.dependency_overrides.clear()
-    engine.dispose()
-
-
-@pytest.fixture
-def rich_client():
-    test_client, engine = _make_test_client(VARIED_ITEMS_DATA)
-    yield test_client
-    app.dependency_overrides.clear()
+    session.close()
+    Base.metadata.drop_all(bind=engine)
     engine.dispose()

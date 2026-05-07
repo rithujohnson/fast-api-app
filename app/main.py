@@ -1,18 +1,31 @@
 """Fast API app entry point"""
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
-from app.routers import item_router, categories_router
+
+from app.database.seed import seed
+from app.database.session import SessionLocal, engine
+from app.database.base import Base
+from app.routers.item_router import router as item_router
+from app.routers.categories_router import router as categories_router
 
 
-app = FastAPI(
-    title="Item API",
-    version="1.0.0",
-    description="A learning project demonstrating a 3-layer FastAPI application.",
-)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        seed(db)
+    finally:
+        db.close()
+    yield
 
-app.include_router(item_router.router)
-app.include_router(categories_router.router)
 
+app = FastAPI(lifespan=lifespan)
+
+app.include_router(item_router)
+app.include_router(categories_router)
 
 @app.get("/")
 def root() -> dict:

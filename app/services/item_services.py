@@ -1,6 +1,7 @@
 """Item service"""
 
 import logging
+from sqlalchemy.orm import Session
 from app.exceptions import DuplicateItemNameError, InvalidCategoryError, InvalidPriceRangeError, ItemNotFoundError
 from app.models.category import Category
 from app.models.item import Item
@@ -11,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_all_items(
+    db: Session,
     category: str | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
@@ -22,6 +24,7 @@ def get_all_items(
     if min_price is not None and max_price is not None and min_price > max_price:
         raise InvalidPriceRangeError(min_price, max_price)
     return item_repository.get_all(
+        db=db,
         category=category,
         min_price=min_price,
         max_price=max_price,
@@ -32,17 +35,18 @@ def get_all_items(
     )
 
 
-def get_item(item_id: int) -> Item:
+def get_item(db: Session, item_id: int) -> Item:
     try:
-        return item_repository.get_by_id(item_id)
+        return item_repository.get_by_id(db, item_id)
     except ItemNotFoundError:
         logger.warning("Item not found: id=%s", item_id)
         raise
 
 
-def create_item(request: ItemCreateRequest) -> Item:
+def create_item(db: Session, request: ItemCreateRequest) -> Item:
     try:
         item = item_repository.create(
+            db=db,
             name=request.name, price=request.price,
             category=request.category, description=request.description,
         )
@@ -56,9 +60,10 @@ def create_item(request: ItemCreateRequest) -> Item:
     return item
 
 
-def update_item(item_id: int, request: ItemUpdateRequest) -> Item:
+def update_item(db: Session, item_id: int, request: ItemUpdateRequest) -> Item:
     try:
         item = item_repository.update(
+            db=db,
             item_id=item_id, name=request.name, price=request.price,
             category=request.category, description=request.description,
         )
@@ -72,9 +77,10 @@ def update_item(item_id: int, request: ItemUpdateRequest) -> Item:
     return item
 
 
-def patch_item(item_id: int, request: ItemPatchRequest) -> Item:
+def patch_item(db: Session, item_id: int, request: ItemPatchRequest) -> Item:
     try:
         item = item_repository.patch(
+            db=db,
             item_id=item_id, name=request.name, price=request.price,
             category=request.category, description=request.description,
         )
@@ -88,14 +94,14 @@ def patch_item(item_id: int, request: ItemPatchRequest) -> Item:
     return item
 
 
-def delete_item(item_id: int) -> None:
+def delete_item(db: Session, item_id: int) -> None:
     try:
-        item_repository.delete(item_id)
+        item_repository.delete(db, item_id)
     except ItemNotFoundError:
         logger.warning("Item not found for deletion: id=%s", item_id)
         raise
     logger.info("Item deleted: id=%s", item_id)
 
 
-def get_all_categories() -> set[Category]:
-    return item_repository.get_all_categories()
+def get_all_categories(db: Session) -> set[Category]:
+    return item_repository.get_all_categories(db)

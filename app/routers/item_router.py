@@ -1,7 +1,9 @@
 """Item router"""
 
 from typing import Literal
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from app.database.session import get_db
 from app.services import item_services
 from app.schemas.item_schema import ItemCreateRequest, ItemResponse, ItemUpdateRequest, ItemPatchRequest
 from app.exceptions import AppBaseException, DuplicateItemNameError, InvalidCategoryError, InvalidPriceRangeError, ItemNotFoundError
@@ -27,9 +29,11 @@ def get_all_items(
     order: Literal["asc", "desc"] = Query(default="asc"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
+    db: Session = Depends(get_db),
 ) -> list[ItemResponse]:
     try:
         return item_services.get_all_items(
+            db=db,
             category=category,
             min_price=min_price,
             max_price=max_price,
@@ -43,17 +47,17 @@ def get_all_items(
 
 
 @router.get("/{item_id}", response_model=ItemResponse)
-def get_item(item_id: int) -> ItemResponse:
+def get_item(item_id: int, db: Session = Depends(get_db)) -> ItemResponse:
     try:
-        return item_services.get_item(item_id)
+        return item_services.get_item(db, item_id)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
 
 
 @router.post("/", status_code=201, response_model=ItemResponse)
-def create_item(request: ItemCreateRequest) -> ItemResponse:
+def create_item(request: ItemCreateRequest, db: Session = Depends(get_db)) -> ItemResponse:
     try:
-        return item_services.create_item(request)
+        return item_services.create_item(db, request)
     except DuplicateItemNameError as e:
         raise HTTPException(status_code=409, detail=_error(e))
     except InvalidCategoryError as e:
@@ -61,9 +65,9 @@ def create_item(request: ItemCreateRequest) -> ItemResponse:
 
 
 @router.put("/{item_id}", response_model=ItemResponse)
-def update_item(item_id: int, request: ItemUpdateRequest) -> ItemResponse:
+def update_item(item_id: int, request: ItemUpdateRequest, db: Session = Depends(get_db)) -> ItemResponse:
     try:
-        return item_services.update_item(item_id, request)
+        return item_services.update_item(db, item_id, request)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
     except InvalidCategoryError as e:
@@ -71,9 +75,9 @@ def update_item(item_id: int, request: ItemUpdateRequest) -> ItemResponse:
 
 
 @router.patch("/{item_id}", response_model=ItemResponse)
-def patch_item(item_id: int, request: ItemPatchRequest) -> ItemResponse:
+def patch_item(item_id: int, request: ItemPatchRequest, db: Session = Depends(get_db)) -> ItemResponse:
     try:
-        return item_services.patch_item(item_id, request)
+        return item_services.patch_item(db, item_id, request)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
     except InvalidCategoryError as e:
@@ -81,8 +85,8 @@ def patch_item(item_id: int, request: ItemPatchRequest) -> ItemResponse:
 
 
 @router.delete("/{item_id}", status_code=204)
-def delete_item(item_id: int) -> None:
+def delete_item(item_id: int, db: Session = Depends(get_db)) -> None:
     try:
-        item_services.delete_item(item_id)
+        item_services.delete_item(db, item_id)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
