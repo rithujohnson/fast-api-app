@@ -30,8 +30,9 @@ def test_get_item_by_id_returns_200(client: TestClient):
 def test_get_item_not_found_returns_404(client: TestClient):
     response = client.get("/items/99")
     assert response.status_code == 404
-    assert response.json()["detail"] == "item not found"
-
+    body = response.json()["detail"]
+    assert body["code"] == "ITEM_NOT_FOUND"
+    assert "99" in body["message"]
 
 # --- POST ---
 def test_create_item_returns_201(client: TestClient):
@@ -80,6 +81,13 @@ def test_create_item_missing_fields_returns_422(client: TestClient):
     assert response.status_code == 422
 
 
+def test_create_item_duplicate_name_returns_409(client: TestClient):
+    response = client.post("/items/", json={"name": "Apple", "price": 1.50, "category": "Fruit"})
+    assert response.status_code == 409
+    body = response.json()["detail"]
+    assert body["code"] == "DUPLICATE_ITEM_NAME"
+    assert "Apple" in body["message"]
+
 # --- PUT ---
 
 def test_update_item_returns_200(client: TestClient):
@@ -106,11 +114,10 @@ def test_update_item_clears_description_when_omitted(client: TestClient):
 
 
 def test_update_item_not_found_returns_404(client: TestClient):
-    response = client.put(
-        "/items/99",
-        json={"name": "Ghost", "price": 1.00, "category": "Other"}
-    )
+    response = client.put("/items/99", json={"name": "Ghost", "price": 1.00, "category": "Other"})
     assert response.status_code == 404
+    body = response.json()["detail"]
+    assert body["code"] == "ITEM_NOT_FOUND"
 
 
 def test_update_item_missing_required_field_returns_422(client: TestClient):
@@ -149,6 +156,8 @@ def test_patch_item_multiple_fields_returns_200(client: TestClient):
 def test_patch_item_not_found_returns_404(client: TestClient):
     response = client.patch("/items/99", json={"price": 3.00})
     assert response.status_code == 404
+    body = response.json()["detail"]
+    assert body["code"] == "ITEM_NOT_FOUND"
 
 
 def test_patch_item_empty_name_returns_422(client: TestClient):
@@ -172,6 +181,8 @@ def test_delete_item_returns_204(client: TestClient):
 def test_delete_item_not_found_returns_404(client: TestClient):
     response = client.delete("/items/99")
     assert response.status_code == 404
+    body = response.json()["detail"]
+    assert body["code"] == "ITEM_NOT_FOUND"
 
 
 def test_deleted_item_cannot_be_retrieved(client: TestClient):
@@ -328,6 +339,8 @@ def test_get_items_negative_min_price_returns_422(rich_client: TestClient):
 def test_get_items_min_price_greater_than_max_price_returns_400(rich_client: TestClient):
     response = rich_client.get("/items/?min_price=5.0&max_price=1.0")
     assert response.status_code == 400
+    body = response.json()["detail"]
+    assert body["code"] == "INVALID_PRICE_RANGE"
 
 
 # --- GET all: combined ---

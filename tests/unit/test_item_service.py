@@ -5,6 +5,7 @@ from unittest.mock import patch
 from app.models.item import Item
 from app.schemas.item_schema import ItemCreateRequest, ItemUpdateRequest, ItemPatchRequest
 from app.services import item_services
+from app.exceptions import DuplicateItemNameError, InvalidPriceRangeError, ItemNotFoundError
 
 
 pytestmark = pytest.mark.unit
@@ -55,10 +56,11 @@ def test_get_all_items_forwards_filters_to_repository():
 
 
 def test_get_all_items_raises_when_min_price_greater_than_max_price():
-    with pytest.raises(ValueError, match="min_price cannot be greater than max_price"):
+    with pytest.raises(InvalidPriceRangeError) as exc_info :
         item_services.get_all_items(min_price=5.00, max_price=1.00)
+    assert exc_info.value.min_price == 5.00
+    assert exc_info.value.max_price == 1.00
 
-        
 # --- get_item ---
 
 def test_get_item_returns_item_when_found():
@@ -70,11 +72,12 @@ def test_get_item_returns_item_when_found():
         assert result.name == "Apple"
 
 
-def test_get_item_returns_none_when_not_found():
-    with patch("app.services.item_services.item_repository.get_by_id", return_value=None) as mock:
-        result = item_services.get_item(99)
+def test_get_item_raises_when_not_found():
+    with patch("app.services.item_services.item_repository.get_by_id", side_effect=ItemNotFoundError(99)) as mock:
+        with pytest.raises(ItemNotFoundError) as exc_info:
+            item_services.get_item(99)
         mock.assert_called_once_with(99)
-        assert result is None
+        assert exc_info.value.item_id == 99
 
 
 # --- create_item ---
@@ -88,6 +91,15 @@ def test_create_item_returns_created_item():
         assert result.id == 3
         assert result.name == "Mango"
         assert result.price == 2.00
+
+
+def test_create_item_raises_on_duplicate_name():
+    request = ItemCreateRequest(name="Apple", price=1.50, category="Fruit")
+    with patch("app.services.item_services.item_repository.create", side_effect=DuplicateItemNameError("Apple")) as mock:
+        with pytest.raises(DuplicateItemNameError) as exc_info:
+            item_services.create_item(request)
+        mock.assert_called_once_with(name="Apple", price=1.50, category="Fruit", description=None)
+        assert exc_info.value.name == "Apple"
 
 
 # --- update_item ---
@@ -105,14 +117,13 @@ def test_update_item_returns_updated_item():
         assert result.price == 2.00
 
 
-def test_update_item_returns_none_when_not_found():
+def test_update_item_raises_when_not_found():
     request = ItemUpdateRequest(name="Ghost", price=1.00, category="Other", description=None)
-    with patch("app.services.item_services.item_repository.update", return_value=None) as mock:
-        result = item_services.update_item(99, request)
-        mock.assert_called_once_with(
-            item_id=99, name="Ghost", price=1.00, category="Other", description=None
-        )
-        assert result is None
+    with patch("app.services.item_services.item_repository.update", side_effect=ItemNotFoundError(99)) as mock:
+        with pytest.raises(ItemNotFoundError) as exc_info:
+            item_services.update_item(99, request)
+        mock.assert_called_once_with(item_id=99, name="Ghost", price=1.00, category="Other", description=None)
+        assert exc_info.value.item_id == 99
 
 
 # --- patch_item ---
@@ -128,25 +139,26 @@ def test_patch_item_returns_patched_item():
         assert result.name == "Apple"
 
 
-def test_patch_item_returns_none_when_not_found():
+def test_patch_item_raises_when_not_found():
     request = ItemPatchRequest(name="Ghost")
-    with patch("app.services.item_services.item_repository.patch", return_value=None) as mock:
-        result = item_services.patch_item(99, request)
+    with patch("app.services.item_services.item_repository.patch", side_effect=ItemNotFoundError(99)) as mock:
+        with pytest.raises(ItemNotFoundError) as exc_info:
+            item_services.patch_item(99, request)
         mock.assert_called_once_with(item_id=99, name="Ghost", price=None, category=None, description=None)
-        assert result is None
+        assert exc_info.value.item_id == 99
 
 
 # --- delete_item ---
 
-def test_delete_item_returns_true_when_found():
-    with patch("app.services.item_services.item_repository.delete", return_value=True) as mock:
-        result = item_services.delete_item(1)
+def test_delete_item_succeeds_when_found():
+    with patch("app.services.item_services.item_repository.delete", return_value=None) as mock:
+        item_services.delete_item(1)  # should not raise
         mock.assert_called_once_with(1)
-        assert result is True
 
 
-def test_delete_item_returns_false_when_not_found():
-    with patch("app.services.item_services.item_repository.delete", return_value=False) as mock:
-        result = item_services.delete_item(99)
+def test_delete_item_raises_when_not_found():
+    with patch("app.services.item_services.item_repository.delete", side_effect=ItemNotFoundError(99)) as mock:
+        with pytest.raises(ItemNotFoundError) as exc_info:
+            item_services.delete_item(99)
         mock.assert_called_once_with(99)
-        assert result is False
+        assert exc_info.value.item_id == 99

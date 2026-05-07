@@ -3,6 +3,7 @@
 import pytest
 import app.repositories.item_repository as item_repository
 from app.models.item import Item
+from app.exceptions import DuplicateItemNameError, ItemNotFoundError
 
 
 pytestmark = pytest.mark.unit
@@ -23,6 +24,46 @@ def reset_items():
     yield
     item_repository._items = dict(VARIED_ITEMS)
 
+
+# --- get_by_id ---
+
+def test_get_by_id_raises_when_not_found():
+    with pytest.raises(ItemNotFoundError) as exc_info:
+        item_repository.get_by_id(99)
+    assert exc_info.value.item_id == 99
+
+
+# --- create ---
+
+def test_create_raises_on_duplicate_name():
+    with pytest.raises(DuplicateItemNameError) as exc_info:
+        item_repository.create(name="Apple", price=2.00, category="Fruit", description=None)
+    assert exc_info.value.name == "Apple"
+
+
+# --- update ---
+
+def test_update_raises_when_not_found():
+    with pytest.raises(ItemNotFoundError) as exc_info:
+        item_repository.update(item_id=99, name="Ghost", price=1.00, category="Other", description=None)
+    assert exc_info.value.item_id == 99
+
+
+# --- patch ---
+
+def test_patch_raises_when_not_found():
+    with pytest.raises(ItemNotFoundError) as exc_info:
+        item_repository.patch(item_id=99, name="Ghost", price=None, category=None, description=None)
+    assert exc_info.value.item_id == 99
+
+
+# --- delete ---
+
+def test_delete_raises_when_not_found():
+    with pytest.raises(ItemNotFoundError) as exc_info:
+        item_repository.delete(99)
+    assert exc_info.value.item_id == 99
+    
 
 # --- no filters ---
 

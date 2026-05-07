@@ -4,6 +4,12 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Query
 from app.services import item_services
 from app.schemas.item_schema import ItemCreateRequest, ItemResponse, ItemUpdateRequest, ItemPatchRequest    
+from app.exceptions import AppBaseException, DuplicateItemNameError, InvalidPriceRangeError, ItemNotFoundError
+from app.schemas.error_schema import ErrorResponse
+
+
+def _error(exc: AppBaseException) -> dict:
+    return ErrorResponse(code=exc.code, message=str(exc)).model_dump(exclude_none=True)
 
 
 router = APIRouter(
@@ -32,39 +38,46 @@ def get_all_items(
             skip=skip,
             limit=limit,
         )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except InvalidPriceRangeError as e:
+        raise HTTPException(status_code=400, detail=_error(e))
+
 
 
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item(item_id: int) -> ItemResponse:
-    item = item_services.get_item(item_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="item not found")
-    return item
+    try:
+        return item_services.get_item(item_id)
+    except ItemNotFoundError as e:
+        raise HTTPException(status_code=404, detail=_error(e))
 
 
 @router.post("/", status_code=201, response_model=ItemResponse)
 def create_item(request: ItemCreateRequest) -> ItemResponse:
-    return item_services.create_item(request)
+    try:
+        return item_services.create_item(request)
+    except DuplicateItemNameError as e:
+        raise HTTPException(status_code=409, detail=_error(e))
+    
 
 @router.put("/{item_id}", response_model=ItemResponse)
 def update_item(item_id: int, request: ItemUpdateRequest) -> ItemResponse:
-    item = item_services.update_item(item_id, request)
-    if item is None:
-        raise HTTPException(status_code=404, detail="item not found")
-    return item 
+    try:
+        return item_services.update_item(item_id, request)
+    except ItemNotFoundError as e:
+        raise HTTPException(status_code=404, detail=_error(e))
+
 
 @router.patch("/{item_id}", response_model=ItemResponse)
 def patch_item(item_id: int, request: ItemPatchRequest) -> ItemResponse:
-    item = item_services.patch_item(item_id, request)
-    if item is None:
-        raise HTTPException(status_code=404, detail="item not found")
-    return item
+    try:
+        return item_services.patch_item(item_id, request)
+    except ItemNotFoundError as e:
+        raise HTTPException(status_code=404, detail=_error(e))
 
 @router.delete("/{item_id}", status_code=204)
 def delete_item(item_id: int) -> None:
-    success = item_services.delete_item(item_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="item not found")   
+    try:
+        item_services.delete_item(item_id)
+    except ItemNotFoundError as e:
+        raise HTTPException(status_code=404, detail=_error(e))
     
