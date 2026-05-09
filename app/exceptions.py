@@ -56,3 +56,48 @@ class InvalidCategoryError(AppBaseException):
 
     def __repr__(self) -> str:
         return f"InvalidCategoryError(name={self.name!r})"
+    
+
+class UserAlreadyExistsError(AppBaseException):
+    code = "USER_ALREADY_EXISTS"
+
+    def __init__(self, username: str) -> None:
+        self.username = username
+        self.message = f"A user with the username '{username}' already exists."
+        super().__init__(self.message)
+
+    def __repr__(self) -> str:
+        return f"UserAlreadyExistsError(username={self.username!r})"
+
+
+class InvalidCredentialsError(AppBaseException):
+    code = "INVALID_CREDENTIALS"
+
+    def __init__(self) -> None:
+        self.message = "Invalid credentials."
+        super().__init__(self.message)
+
+    def __repr__(self) -> str:
+        return "InvalidCredentialsError()"
+
+
+class TokenExpiredError(AppBaseException):
+    code = "TOKEN_EXPIRED"
+
+    def __init__(self) -> None:
+        self.message = "Token has expired."
+        super().__init__(self.message)
+
+    def __repr__(self) -> str:
+        return "TokenExpiredError()"
+
+
+class InsufficientPermissionsError(AppBaseException):
+    code = "INSUFFICIENT_PERMISSIONS"
+
+    def __init__(self) -> None:
+        self.message = "You do not have permission to perform this action."
+        super().__init__(self.message)
+
+    def __repr__(self) -> str:
+        return "InsufficientPermissionsError()"

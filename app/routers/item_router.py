@@ -8,7 +8,8 @@ from app.services import item_services
 from app.schemas.item_schema import ItemCreateRequest, ItemResponse, ItemUpdateRequest, ItemPatchRequest
 from app.exceptions import AppBaseException, DuplicateItemNameError, InvalidCategoryError, InvalidPriceRangeError, ItemNotFoundError
 from app.schemas.error_schema import ErrorResponse
-
+from app.dependencies import get_current_user, require_admin
+from app.models.user import User
 
 def _error(exc: AppBaseException) -> dict:
     return ErrorResponse(code=exc.code, message=str(exc)).model_dump(exclude_none=True)
@@ -55,7 +56,7 @@ def get_item(item_id: int, db: Session = Depends(get_db)) -> ItemResponse:
 
 
 @router.post("/", status_code=201, response_model=ItemResponse)
-def create_item(request: ItemCreateRequest, db: Session = Depends(get_db)) -> ItemResponse:
+def create_item(request: ItemCreateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
     try:
         return item_services.create_item(db, request)
     except DuplicateItemNameError as e:
@@ -65,7 +66,7 @@ def create_item(request: ItemCreateRequest, db: Session = Depends(get_db)) -> It
 
 
 @router.put("/{item_id}", response_model=ItemResponse)
-def update_item(item_id: int, request: ItemUpdateRequest, db: Session = Depends(get_db)) -> ItemResponse:
+def update_item(item_id: int, request: ItemUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
     try:
         return item_services.update_item(db, item_id, request)
     except ItemNotFoundError as e:
@@ -75,7 +76,7 @@ def update_item(item_id: int, request: ItemUpdateRequest, db: Session = Depends(
 
 
 @router.patch("/{item_id}", response_model=ItemResponse)
-def patch_item(item_id: int, request: ItemPatchRequest, db: Session = Depends(get_db)) -> ItemResponse:
+def patch_item(item_id: int, request: ItemPatchRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
     try:
         return item_services.patch_item(db, item_id, request)
     except ItemNotFoundError as e:
@@ -85,7 +86,7 @@ def patch_item(item_id: int, request: ItemPatchRequest, db: Session = Depends(ge
 
 
 @router.delete("/{item_id}", status_code=204)
-def delete_item(item_id: int, db: Session = Depends(get_db)) -> None:
+def delete_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)) -> None:
     try:
         item_services.delete_item(db, item_id)
     except ItemNotFoundError as e:
