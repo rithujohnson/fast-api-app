@@ -2,7 +2,7 @@
 
 from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.session import get_db
 from app.services import item_services
 from app.schemas.item_schema import ItemCreateRequest, ItemResponse, ItemUpdateRequest, ItemPatchRequest
@@ -22,7 +22,7 @@ router = APIRouter(
 
 
 @router.get("/", response_model=list[ItemResponse])
-def get_all_items(
+async def get_all_items(
     category: str | None = Query(default=None),
     min_price: float | None = Query(default=None, gt=0),
     max_price: float | None = Query(default=None, gt=0),
@@ -30,10 +30,10 @@ def get_all_items(
     order: Literal["asc", "desc"] = Query(default="asc"),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=10, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ) -> list[ItemResponse]:
     try:
-        return item_services.get_all_items(
+        return await item_services.get_all_items(
             db=db,
             category=category,
             min_price=min_price,
@@ -48,17 +48,17 @@ def get_all_items(
 
 
 @router.get("/{item_id}", response_model=ItemResponse)
-def get_item(item_id: int, db: Session = Depends(get_db)) -> ItemResponse:
+async def get_item(item_id: int, db: AsyncSession = Depends(get_db)) -> ItemResponse:
     try:
-        return item_services.get_item(db, item_id)
+        return await item_services.get_item(db, item_id)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
 
 
 @router.post("/", status_code=201, response_model=ItemResponse)
-def create_item(request: ItemCreateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
+async def create_item(request: ItemCreateRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
     try:
-        return item_services.create_item(db, request)
+        return await item_services.create_item(db, request)
     except DuplicateItemNameError as e:
         raise HTTPException(status_code=409, detail=_error(e))
     except InvalidCategoryError as e:
@@ -66,9 +66,9 @@ def create_item(request: ItemCreateRequest, db: Session = Depends(get_db), curre
 
 
 @router.put("/{item_id}", response_model=ItemResponse)
-def update_item(item_id: int, request: ItemUpdateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
+async def update_item(item_id: int, request: ItemUpdateRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
     try:
-        return item_services.update_item(db, item_id, request)
+        return await item_services.update_item(db, item_id, request)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
     except InvalidCategoryError as e:
@@ -76,9 +76,9 @@ def update_item(item_id: int, request: ItemUpdateRequest, db: Session = Depends(
 
 
 @router.patch("/{item_id}", response_model=ItemResponse)
-def patch_item(item_id: int, request: ItemPatchRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
+async def patch_item(item_id: int, request: ItemPatchRequest, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)) -> ItemResponse:
     try:
-        return item_services.patch_item(db, item_id, request)
+        return await item_services.patch_item(db, item_id, request)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))
     except InvalidCategoryError as e:
@@ -86,8 +86,8 @@ def patch_item(item_id: int, request: ItemPatchRequest, db: Session = Depends(ge
 
 
 @router.delete("/{item_id}", status_code=204)
-def delete_item(item_id: int, db: Session = Depends(get_db), current_user: User = Depends(require_admin)) -> None:
+async def delete_item(item_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(require_admin)) -> None:
     try:
-        item_services.delete_item(db, item_id)
+        await item_services.delete_item(db, item_id)
     except ItemNotFoundError as e:
         raise HTTPException(status_code=404, detail=_error(e))

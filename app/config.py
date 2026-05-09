@@ -2,7 +2,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "sqlite:///./dev.db"
+    database_url: str = "sqlite+aiosqlite:///./dev.db"
     secret_key: str = "change-me-in-production"
     access_token_expire_minutes: int = 60
 

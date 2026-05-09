@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.orm_models import CategoryORM, ItemORM
 
@@ -10,13 +11,14 @@ INITIAL_ITEMS = [
 ]
 
 
-def seed(db: Session) -> None:
-    if db.query(CategoryORM).first():
+async def seed(db: AsyncSession) -> None:
+    result = await db.execute(select(CategoryORM).limit(1))
+    if result.scalar_one_or_none():
         return
 
     categories = {name: CategoryORM(name=name) for name in CATEGORY_NAMES}
     db.add_all(categories.values())
-    db.flush()
+    await db.flush()
 
     for item_data in INITIAL_ITEMS:
         db.add(ItemORM(
@@ -26,4 +28,4 @@ def seed(db: Session) -> None:
             category_id=categories[item_data["category_name"]].id,
         ))
 
-    db.commit()
+    await db.commit()

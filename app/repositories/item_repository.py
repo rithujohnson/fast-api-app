@@ -1,7 +1,6 @@
-"""Item repository"""
-
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database.orm_models import CategoryORM, ItemORM
 from app.exceptions import DuplicateItemNameError, InvalidCategoryError, ItemNotFoundError
@@ -19,19 +18,18 @@ def _to_domain(orm_item: ItemORM) -> Item:
     )
 
 
-def _get_category_orm(db: Session, category_name: str) -> CategoryORM:
-    category_orm = (
-        db.query(CategoryORM)
-        .filter(func.lower(CategoryORM.name) == category_name.lower())
-        .first()
+async def _get_category_orm(db: AsyncSession, category_name: str) -> CategoryORM:
+    result = await db.execute(
+        select(CategoryORM).where(func.lower(CategoryORM.name) == category_name.lower())
     )
+    category_orm = result.scalar_one_or_none()
     if not category_orm:
         raise InvalidCategoryError(category_name)
     return category_orm
 
 
-def get_all(
-    db: Session,
+async def get_all(
+    db: AsyncSession,
     category: str | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
@@ -40,15 +38,15 @@ def get_all(
     skip: int = 0,
     limit: int = 10,
 ) -> list[Item]:
-    query = db.query(ItemORM)
+    query = select(ItemORM).options(selectinload(ItemORM.category))
     if category is not None:
-        query = query.join(ItemORM.category).filter(
+        query = query.join(ItemORM.category).where(
             func.lower(CategoryORM.name) == category.lower()
         )
     if min_price is not None:
-        query = query.filter(ItemORM.price >= min_price)
+        query = query.where(ItemORM.price >= min_price)
     if max_price is not None:
-        query = query.filter(ItemORM.price <= max_price)
+        query = query.where(ItemORM.price <= max_price)
     if sort_by == "name":
         col = ItemORM.name
     elif sort_by == "price":
@@ -56,75 +54,101 @@ def get_all(
     else:
         col = ItemORM.id
     query = query.order_by(col.desc() if order == "desc" else col.asc())
-    return [_to_domain(item) for item in query.offset(skip).limit(limit).all()]
+    query = query.offset(skip).limit(limit)
+    result = await db.execute(query)
+    return [_to_domain(item) for item in result.scalars().all()]
 
 
-def get_by_id(db: Session, item_id: int) -> Item:
-    orm_item = db.get(ItemORM, item_id)
-    if not orm_item:
-        raise ItemNotFoundError(item_id)
-    return _to_domain(orm_item)
-
-
-def create(db: Session, name: str, price: float, category: str, description: str | None) -> Item:
-    if db.query(ItemORM).filter(func.lower(ItemORM.name) == name.lower()).first():
-        raise DuplicateItemNameError(name)
-    category_orm = _get_category_orm(db, category)
-    orm_item = ItemORM(
-        name=name,
-        price=price,
-        category_id=category_orm.id,
-        description=description,
+async def get_by_id(db: AsyncSession, item_id: int) -> Item:
+    result = await db.execute(
+        select(ItemORM).options(selectinload(ItemORM.category)).where(ItemORM.id == item_id)
     )
-    db.add(orm_item)
-    db.commit()
-    db.refresh(orm_item)
+    orm_item = result.scalar_one_or_none()
+    if not orm_item:
+        raise ItemNotFoundError(item_id)
     return _to_domain(orm_item)
 
 
-def update(db: Session, item_id: int, name: str, price: float, category: str, description: str | None) -> Item:
-    orm_item = db.get(ItemORM, item_id)
+async def create(db: AsyncSession, name: str, price: float, category: str, description: str | None) -> Item:
+    existing = await db.execute(
+        select(ItemORM).where(func.lower(ItemORM.name) == name.lower())
+    )
+    if existing.scalar_one_or_none():
+        raise DuplicateItemNameError(name)
+    category_orm = await _get_category_orm(db, category)
+    orm_item = ItemORM(name=name, price=price, category_id=category_orm.id, description=description)
+    db.add(orm_item)
+    await db.commit()
+    await db.refresh(orm_item)
+    result = await db.execute(
+        select(ItemORM).options(selectinload(ItemORM.category)).where(ItemORM.id == orm_item.id)
+    )
+    return _to_domain(result.scalar_one())
+
+
+async def update(db: AsyncSession, item_id: int, name: str, price: float, category: str, description: str | None) -> Item:
+    result = await db.execute(
+        select(ItemORM).where(ItemORM.id == item_id)
+    )
+    orm_item = result.scalar_one_or_none()
     if not orm_item:
         raise ItemNotFoundError(item_id)
-    if db.query(ItemORM).filter(func.lower(ItemORM.name) == name.lower(), ItemORM.id != item_id).first():
+    duplicate = await db.execute(
+        select(ItemORM).where(func.lower(ItemORM.name) == name.lower(), ItemORM.id != item_id)
+    )
+    if duplicate.scalar_one_or_none():
         raise DuplicateItemNameError(name)
-    category_orm = _get_category_orm(db, category)
+    category_orm = await _get_category_orm(db, category)
     orm_item.name = name
     orm_item.price = price
     orm_item.category_id = category_orm.id
     orm_item.description = description
-    db.commit()
-    db.refresh(orm_item)
-    return _to_domain(orm_item)
+    await db.commit()
+    result = await db.execute(
+        select(ItemORM).options(selectinload(ItemORM.category)).where(ItemORM.id == item_id)
+    )
+    return _to_domain(result.scalar_one())
 
 
-def patch(db: Session, item_id: int, name: str | None, price: float | None, category: str | None, description: str | None) -> Item:
-    orm_item = db.get(ItemORM, item_id)
+async def patch(db: AsyncSession, item_id: int, name: str | None, price: float | None, category: str | None, description: str | None) -> Item:
+    result = await db.execute(
+        select(ItemORM).where(ItemORM.id == item_id)
+    )
+    orm_item = result.scalar_one_or_none()
     if not orm_item:
         raise ItemNotFoundError(item_id)
     if name is not None:
-        if db.query(ItemORM).filter(func.lower(ItemORM.name) == name.lower(), ItemORM.id != item_id).first():
+        duplicate = await db.execute(
+            select(ItemORM).where(func.lower(ItemORM.name) == name.lower(), ItemORM.id != item_id)
+        )
+        if duplicate.scalar_one_or_none():
             raise DuplicateItemNameError(name)
         orm_item.name = name
     if price is not None:
         orm_item.price = price
     if category is not None:
-        category_orm = _get_category_orm(db, category)
+        category_orm = await _get_category_orm(db, category)
         orm_item.category_id = category_orm.id
     if description is not None:
         orm_item.description = description
-    db.commit()
-    db.refresh(orm_item)
-    return _to_domain(orm_item)
+    await db.commit()
+    result = await db.execute(
+        select(ItemORM).options(selectinload(ItemORM.category)).where(ItemORM.id == item_id)
+    )
+    return _to_domain(result.scalar_one())
 
 
-def delete(db: Session, item_id: int) -> None:
-    orm_item = db.get(ItemORM, item_id)
+async def delete(db: AsyncSession, item_id: int) -> None:
+    result = await db.execute(
+        select(ItemORM).where(ItemORM.id == item_id)
+    )
+    orm_item = result.scalar_one_or_none()
     if not orm_item:
         raise ItemNotFoundError(item_id)
-    db.delete(orm_item)
-    db.commit()
+    await db.delete(orm_item)
+    await db.commit()
 
 
-def get_all_categories(db: Session) -> set[Category]:
-    return {Category(c.name) for c in db.query(CategoryORM).all()}
+async def get_all_categories(db: AsyncSession) -> set[Category]:
+    result = await db.execute(select(CategoryORM))
+    return {Category(c.name) for c in result.scalars().all()}

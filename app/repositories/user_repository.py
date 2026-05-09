@@ -1,5 +1,5 @@
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.orm_models import UserORM
 from app.exceptions import UserAlreadyExistsError
@@ -15,20 +15,19 @@ def _to_domain(orm_user: UserORM) -> User:
     )
 
 
-def get_by_username(db: Session, username: str) -> User | None:
-    orm_user = (
-        db.query(UserORM)
-        .filter(func.lower(UserORM.username) == username.lower())
-        .first()
+async def get_by_username(db: AsyncSession, username: str) -> User | None:
+    result = await db.execute(
+        select(UserORM).where(func.lower(UserORM.username) == username.lower())
     )
+    orm_user = result.scalar_one_or_none()
     return _to_domain(orm_user) if orm_user else None
 
 
-def create(db: Session, username: str, hashed_password: str, role: str) -> User:
-    if get_by_username(db, username):
+async def create(db: AsyncSession, username: str, hashed_password: str, role: str) -> User:
+    if await get_by_username(db, username):
         raise UserAlreadyExistsError(username)
     orm_user = UserORM(username=username, hashed_password=hashed_password, role=role)
     db.add(orm_user)
-    db.commit()
-    db.refresh(orm_user)
+    await db.commit()
+    await db.refresh(orm_user)
     return _to_domain(orm_user)

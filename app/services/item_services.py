@@ -1,18 +1,18 @@
-"""Item service"""
-
 import logging
-from sqlalchemy.orm import Session
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.exceptions import DuplicateItemNameError, InvalidCategoryError, InvalidPriceRangeError, ItemNotFoundError
 from app.models.category import Category
 from app.models.item import Item
-from app.schemas.item_schema import ItemCreateRequest, ItemUpdateRequest, ItemPatchRequest
 from app.repositories import item_repository
+from app.schemas.item_schema import ItemCreateRequest, ItemPatchRequest, ItemUpdateRequest
 
 logger = logging.getLogger(__name__)
 
 
-def get_all_items(
-    db: Session,
+async def get_all_items(
+    db: AsyncSession,
     category: str | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
@@ -23,7 +23,7 @@ def get_all_items(
 ) -> list[Item]:
     if min_price is not None and max_price is not None and min_price > max_price:
         raise InvalidPriceRangeError(min_price, max_price)
-    return item_repository.get_all(
+    return await item_repository.get_all(
         db=db,
         category=category,
         min_price=min_price,
@@ -35,17 +35,17 @@ def get_all_items(
     )
 
 
-def get_item(db: Session, item_id: int) -> Item:
+async def get_item(db: AsyncSession, item_id: int) -> Item:
     try:
-        return item_repository.get_by_id(db, item_id)
+        return await item_repository.get_by_id(db, item_id)
     except ItemNotFoundError:
         logger.warning("Item not found: id=%s", item_id)
         raise
 
 
-def create_item(db: Session, request: ItemCreateRequest) -> Item:
+async def create_item(db: AsyncSession, request: ItemCreateRequest) -> Item:
     try:
-        item = item_repository.create(
+        item = await item_repository.create(
             db=db,
             name=request.name, price=request.price,
             category=request.category, description=request.description,
@@ -60,9 +60,9 @@ def create_item(db: Session, request: ItemCreateRequest) -> Item:
     return item
 
 
-def update_item(db: Session, item_id: int, request: ItemUpdateRequest) -> Item:
+async def update_item(db: AsyncSession, item_id: int, request: ItemUpdateRequest) -> Item:
     try:
-        item = item_repository.update(
+        item = await item_repository.update(
             db=db,
             item_id=item_id, name=request.name, price=request.price,
             category=request.category, description=request.description,
@@ -77,9 +77,9 @@ def update_item(db: Session, item_id: int, request: ItemUpdateRequest) -> Item:
     return item
 
 
-def patch_item(db: Session, item_id: int, request: ItemPatchRequest) -> Item:
+async def patch_item(db: AsyncSession, item_id: int, request: ItemPatchRequest) -> Item:
     try:
-        item = item_repository.patch(
+        item = await item_repository.patch(
             db=db,
             item_id=item_id, name=request.name, price=request.price,
             category=request.category, description=request.description,
@@ -94,14 +94,14 @@ def patch_item(db: Session, item_id: int, request: ItemPatchRequest) -> Item:
     return item
 
 
-def delete_item(db: Session, item_id: int) -> None:
+async def delete_item(db: AsyncSession, item_id: int) -> None:
     try:
-        item_repository.delete(db, item_id)
+        await item_repository.delete(db, item_id)
     except ItemNotFoundError:
         logger.warning("Item not found for deletion: id=%s", item_id)
         raise
     logger.info("Item deleted: id=%s", item_id)
 
 
-def get_all_categories(db: Session) -> set[Category]:
-    return item_repository.get_all_categories(db)
+async def get_all_categories(db: AsyncSession) -> set[Category]:
+    return await item_repository.get_all_categories(db)

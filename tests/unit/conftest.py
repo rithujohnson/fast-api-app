@@ -1,7 +1,5 @@
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.database.base import Base
 from app.database.orm_models import CategoryORM, ItemORM
@@ -18,31 +16,27 @@ VARIED_ITEMS_DATA = [
 
 
 @pytest.fixture
-def db():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    session = sessionmaker(bind=engine, autocommit=False, autoflush=False)()
+async def db():
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
-    categories = {name: CategoryORM(name=name) for name in CATEGORY_NAMES}
-    session.add_all(categories.values())
-    session.flush()
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with factory() as session:
+        categories = {name: CategoryORM(name=name) for name in CATEGORY_NAMES}
+        session.add_all(categories.values())
+        await session.flush()
+        for item in VARIED_ITEMS_DATA:
+            session.add(ItemORM(
+                id=item["id"],
+                name=item["name"],
+                price=item["price"],
+                description=item["description"],
+                category_id=categories[item["category_name"]].id,
+            ))
+        await session.commit()
+        yield session
 
-    for item in VARIED_ITEMS_DATA:
-        session.add(ItemORM(
-            id=item["id"],
-            name=item["name"],
-            price=item["price"],
-            description=item["description"],
-            category_id=categories[item["category_name"]].id,
-        ))
-    session.commit()
-
-    yield session
-
-    session.close()
-    Base.metadata.drop_all(bind=engine)
-    engine.dispose()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()

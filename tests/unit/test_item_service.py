@@ -1,7 +1,7 @@
 """Unit tests for item service"""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from app.models.item import Item
 from app.models.category import Category
 from app.schemas.item_schema import ItemCreateRequest, ItemUpdateRequest, ItemPatchRequest
@@ -16,10 +16,10 @@ BANANA = Item(id=2, name="Banana", price=0.75, category=Category("Fruit"), descr
 
 # --- get_all_items ---
 
-def test_get_all_items_returns_list():
+async def test_get_all_items_returns_list():
     db = MagicMock()
-    with patch("app.services.item_services.item_repository.get_all", return_value=[APPLE, BANANA]) as mock:
-        result = item_services.get_all_items(db)
+    with patch("app.services.item_services.item_repository.get_all", new_callable=AsyncMock, return_value=[APPLE, BANANA]) as mock:
+        result = await item_services.get_all_items(db)
         mock.assert_called_once_with(
             db=db,
             category=None, min_price=None, max_price=None,
@@ -29,10 +29,10 @@ def test_get_all_items_returns_list():
         assert result[0].name == "Apple"
 
 
-def test_get_all_items_forwards_filters_to_repository():
+async def test_get_all_items_forwards_filters_to_repository():
     db = MagicMock()
-    with patch("app.services.item_services.item_repository.get_all", return_value=[APPLE]) as mock:
-        item_services.get_all_items(
+    with patch("app.services.item_services.item_repository.get_all", new_callable=AsyncMock, return_value=[APPLE]) as mock:
+        await item_services.get_all_items(
             db, category="Fruit", min_price=1.00, max_price=2.00,
             sort_by="price", order="desc", skip=0, limit=5,
         )
@@ -43,74 +43,74 @@ def test_get_all_items_forwards_filters_to_repository():
         )
 
 
-def test_get_all_items_raises_when_min_price_greater_than_max_price():
+async def test_get_all_items_raises_when_min_price_greater_than_max_price():
     db = MagicMock()
     with pytest.raises(InvalidPriceRangeError) as exc_info:
-        item_services.get_all_items(db, min_price=5.00, max_price=1.00)
+        await item_services.get_all_items(db, min_price=5.00, max_price=1.00)
     assert exc_info.value.min_price == 5.00
     assert exc_info.value.max_price == 1.00
 
 
 # --- get_item ---
 
-def test_get_item_returns_item_when_found():
+async def test_get_item_returns_item_when_found():
     db = MagicMock()
-    with patch("app.services.item_services.item_repository.get_by_id", return_value=APPLE) as mock:
-        result = item_services.get_item(db, 1)
+    with patch("app.services.item_services.item_repository.get_by_id", new_callable=AsyncMock, return_value=APPLE) as mock:
+        result = await item_services.get_item(db, 1)
         mock.assert_called_once_with(db, 1)
         assert result.id == 1
         assert result.name == "Apple"
 
 
-def test_get_item_raises_when_not_found():
+async def test_get_item_raises_when_not_found():
     db = MagicMock()
-    with patch("app.services.item_services.item_repository.get_by_id", side_effect=ItemNotFoundError(99)) as mock:
+    with patch("app.services.item_services.item_repository.get_by_id", new_callable=AsyncMock, side_effect=ItemNotFoundError(99)) as mock:
         with pytest.raises(ItemNotFoundError) as exc_info:
-            item_services.get_item(db, 99)
+            await item_services.get_item(db, 99)
         mock.assert_called_once_with(db, 99)
         assert exc_info.value.item_id == 99
 
 
 # --- create_item ---
 
-def test_create_item_returns_created_item():
+async def test_create_item_returns_created_item():
     db = MagicMock()
     request = ItemCreateRequest(name="Mango", price=2.00, category="Fruit")
     mock_created = Item(id=3, name="Mango", price=2.00, category=Category("Fruit"), description=None)
-    with patch("app.services.item_services.item_repository.create", return_value=mock_created) as mock:
-        result = item_services.create_item(db, request)
+    with patch("app.services.item_services.item_repository.create", new_callable=AsyncMock, return_value=mock_created) as mock:
+        result = await item_services.create_item(db, request)
         mock.assert_called_once_with(db=db, name="Mango", price=2.00, category="Fruit", description=None)
         assert result.id == 3
         assert result.name == "Mango"
 
 
-def test_create_item_raises_on_duplicate_name():
+async def test_create_item_raises_on_duplicate_name():
     db = MagicMock()
     request = ItemCreateRequest(name="Apple", price=1.50, category="Fruit")
-    with patch("app.services.item_services.item_repository.create", side_effect=DuplicateItemNameError("Apple")) as mock:
+    with patch("app.services.item_services.item_repository.create", new_callable=AsyncMock, side_effect=DuplicateItemNameError("Apple")) as mock:
         with pytest.raises(DuplicateItemNameError) as exc_info:
-            item_services.create_item(db, request)
+            await item_services.create_item(db, request)
         mock.assert_called_once_with(db=db, name="Apple", price=1.50, category="Fruit", description=None)
         assert exc_info.value.name == "Apple"
 
 
-def test_create_item_raises_on_invalid_category():
+async def test_create_item_raises_on_invalid_category():
     db = MagicMock()
     request = ItemCreateRequest(name="Candy Bar", price=1.00, category="Fruit")
-    with patch("app.services.item_services.item_repository.create", side_effect=InvalidCategoryError("Candy")):
+    with patch("app.services.item_services.item_repository.create", new_callable=AsyncMock, side_effect=InvalidCategoryError("Candy")):
         with pytest.raises(InvalidCategoryError) as exc_info:
-            item_services.create_item(db, request)
+            await item_services.create_item(db, request)
         assert exc_info.value.name == "Candy"
 
 
 # --- update_item ---
 
-def test_update_item_returns_updated_item():
+async def test_update_item_returns_updated_item():
     db = MagicMock()
     request = ItemUpdateRequest(name="Green Apple", price=2.00, category="Fruit", description="A tart green apple")
     mock_updated = Item(id=1, name="Green Apple", price=2.00, category=Category("Fruit"), description="A tart green apple")
-    with patch("app.services.item_services.item_repository.update", return_value=mock_updated) as mock:
-        result = item_services.update_item(db, 1, request)
+    with patch("app.services.item_services.item_repository.update", new_callable=AsyncMock, return_value=mock_updated) as mock:
+        result = await item_services.update_item(db, 1, request)
         mock.assert_called_once_with(
             db=db, item_id=1, name="Green Apple", price=2.00,
             category="Fruit", description="A tart green apple",
@@ -118,81 +118,81 @@ def test_update_item_returns_updated_item():
         assert result.name == "Green Apple"
 
 
-def test_update_item_raises_when_not_found():
+async def test_update_item_raises_when_not_found():
     db = MagicMock()
     request = ItemUpdateRequest(name="Ghost", price=1.00, category="Fruit", description=None)
-    with patch("app.services.item_services.item_repository.update", side_effect=ItemNotFoundError(99)) as mock:
+    with patch("app.services.item_services.item_repository.update", new_callable=AsyncMock, side_effect=ItemNotFoundError(99)) as mock:
         with pytest.raises(ItemNotFoundError) as exc_info:
-            item_services.update_item(db, 99, request)
+            await item_services.update_item(db, 99, request)
         mock.assert_called_once_with(db=db, item_id=99, name="Ghost", price=1.00, category="Fruit", description=None)
         assert exc_info.value.item_id == 99
 
 
-def test_update_item_raises_on_invalid_category():
+async def test_update_item_raises_on_invalid_category():
     db = MagicMock()
     request = ItemUpdateRequest(name="Apple", price=1.50, category="Fruit")
-    with patch("app.services.item_services.item_repository.update", side_effect=InvalidCategoryError("Invalid")):
+    with patch("app.services.item_services.item_repository.update", new_callable=AsyncMock, side_effect=InvalidCategoryError("Invalid")):
         with pytest.raises(InvalidCategoryError) as exc_info:
-            item_services.update_item(db, 1, request)
+            await item_services.update_item(db, 1, request)
         assert exc_info.value.name == "Invalid"
 
 
 # --- patch_item ---
 
-def test_patch_item_returns_patched_item():
+async def test_patch_item_returns_patched_item():
     db = MagicMock()
     request = ItemPatchRequest(price=3.00)
     mock_patched = Item(id=1, name="Apple", price=3.00, category=Category("Fruit"), description="A juicy red apple")
-    with patch("app.services.item_services.item_repository.patch", return_value=mock_patched) as mock:
-        result = item_services.patch_item(db, 1, request)
+    with patch("app.services.item_services.item_repository.patch", new_callable=AsyncMock, return_value=mock_patched) as mock:
+        result = await item_services.patch_item(db, 1, request)
         mock.assert_called_once_with(db=db, item_id=1, name=None, price=3.00, category=None, description=None)
         assert result.price == 3.00
         assert result.name == "Apple"
 
 
-def test_patch_item_raises_when_not_found():
+async def test_patch_item_raises_when_not_found():
     db = MagicMock()
     request = ItemPatchRequest(name="Ghost")
-    with patch("app.services.item_services.item_repository.patch", side_effect=ItemNotFoundError(99)) as mock:
+    with patch("app.services.item_services.item_repository.patch", new_callable=AsyncMock, side_effect=ItemNotFoundError(99)) as mock:
         with pytest.raises(ItemNotFoundError) as exc_info:
-            item_services.patch_item(db, 99, request)
+            await item_services.patch_item(db, 99, request)
         mock.assert_called_once_with(db=db, item_id=99, name="Ghost", price=None, category=None, description=None)
         assert exc_info.value.item_id == 99
 
 
-def test_patch_item_raises_on_invalid_category():
+async def test_patch_item_raises_on_invalid_category():
     db = MagicMock()
     request = ItemPatchRequest(category="Fruit")
-    with patch("app.services.item_services.item_repository.patch", side_effect=InvalidCategoryError("Invalid")):
+    with patch("app.services.item_services.item_repository.patch", new_callable=AsyncMock, side_effect=InvalidCategoryError("Invalid")):
         with pytest.raises(InvalidCategoryError) as exc_info:
-            item_services.patch_item(db, 1, request)
+            await item_services.patch_item(db, 1, request)
         assert exc_info.value.name == "Invalid"
 
 
 # --- delete_item ---
 
-def test_delete_item_succeeds_when_found():
+async def test_delete_item_succeeds_when_found():
     db = MagicMock()
-    with patch("app.services.item_services.item_repository.delete", return_value=None) as mock:
-        item_services.delete_item(db, 1)
+    with patch("app.services.item_services.item_repository.delete", new_callable=AsyncMock, return_value=None) as mock:
+        await item_services.delete_item(db, 1)
         mock.assert_called_once_with(db, 1)
 
 
-def test_delete_item_raises_when_not_found():
+async def test_delete_item_raises_when_not_found():
     db = MagicMock()
-    with patch("app.services.item_services.item_repository.delete", side_effect=ItemNotFoundError(99)) as mock:
+    with patch("app.services.item_services.item_repository.delete", new_callable=AsyncMock, side_effect=ItemNotFoundError(99)) as mock:
         with pytest.raises(ItemNotFoundError) as exc_info:
-            item_services.delete_item(db, 99)
+            await item_services.delete_item(db, 99)
         mock.assert_called_once_with(db, 99)
         assert exc_info.value.item_id == 99
 
 
 # --- get_all_categories ---
 
-def test_get_all_categories_returns_set_from_repository():
+async def test_get_all_categories_returns_set_from_repository():
     db = MagicMock()
     mock_categories = {Category("Fruit"), Category("Vegetable")}
-    with patch("app.services.item_services.item_repository.get_all_categories", return_value=mock_categories) as mock:
-        result = item_services.get_all_categories(db)
+    with patch("app.services.item_services.item_repository.get_all_categories", new_callable=AsyncMock, return_value=mock_categories) as mock:
+        result = await item_services.get_all_categories(db)
         mock.assert_called_once_with(db)
         assert result == mock_categories

@@ -7,8 +7,8 @@ from fastapi.responses import JSONResponse
 from app.exceptions import InvalidCredentialsError, InsufficientPermissionsError
 from app.schemas.error_schema import ErrorResponse
 from app.database.seed import seed
-from app.database.session import SessionLocal, engine
 from app.database.base import Base
+from app.database.session import AsyncSessionLocal, engine
 from app.routers.item_router import router as item_router
 from app.routers.categories_router import router as categories_router
 from app.routers.auth_router import router as auth_router
@@ -17,12 +17,10 @@ from app.routers.auth_router import router as auth_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-    try:
-        seed(db)
-    finally:
-        db.close()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with AsyncSessionLocal() as db:
+        await seed(db)
     yield
 
 
