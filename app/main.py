@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from app.config import settings
 from app.exceptions import InvalidCredentialsError, InsufficientPermissionsError
 from app.schemas.error_schema import ErrorResponse
 from app.database.seed import seed
@@ -25,6 +27,14 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.exception_handler(InvalidCredentialsError)
 def invalid_credentials_handler(request: Request, exc: InvalidCredentialsError) -> JSONResponse:
